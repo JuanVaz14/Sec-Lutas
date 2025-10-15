@@ -1,144 +1,143 @@
+# models.py
+
 from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.schema import UniqueConstraint # Para garantir a unicidade da matrícula
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime, date
 
-# 1. Base Declarativa
+# --- 1. Configuração do Banco de Dados ---
+
+# Define o nome do arquivo do banco de dados SQLite
+DATABASE_URL = "sqlite:///marica_esportes.db"
+
+# Cria o objeto engine para conectar ao BD
+engine = create_engine(DATABASE_URL)
+
+# Cria a classe Base para as declarações dos modelos
 Base = declarative_base()
 
-# --- Configuração da Conexão e Sessão ---
-engine = create_engine('sqlite:///marica_esportes.db')
-Session = sessionmaker(bind=engine)
+# Cria o Session local
+Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def create_database_tables():
-    """Cria ou atualiza todas as tabelas no banco de dados SQLite."""
-    Base.metadata.create_all(engine)
-    print("Banco de dados e tabelas criadas/atualizadas com sucesso!")
+# --- 2. Definição dos Modelos (Tabelas) ---
 
-
-# =========================================================================
-# 2. Tabela de ACADEMIAS / POLOS DE TREINAMENTO
-# =========================================================================
 class Academia(Base):
     __tablename__ = 'academias'
-    id = Column(Integer, primary_key=True)
-    nome = Column(String)
-    endereco = Column(String)
-    responsavel = Column(String)
     
-    alunos = relationship("Aluno", back_populates="academia") 
-
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), unique=True, nullable=False)
+    endereco = Column(String(255), nullable=False)
+    responsavel = Column(String(100), nullable=True)
+    
+    # Relacionamento 1:N com Aluno (Uma academia tem muitos alunos)
+    alunos = relationship("Aluno", back_populates="academia", cascade="all, delete-orphan")
+    
     def __repr__(self):
-        return f"<Academia(id={self.id}, nome='{self.nome}')>"
+        return f"<Academia(nome='{self.nome}', id={self.id})>"
 
 
-# =========================================================================
-# 3. Tabela de MATRÍCULA E GRADUAÇÃO (Tabela de Ligação Aluno <-> Modalidade)
-# =========================================================================
-class MatriculaModalidade(Base):
-    __tablename__ = 'matriculas_modalidades'
-    
-    # ID primária da tabela de associação
-    id = Column(Integer, primary_key=True) 
-    
-    # Colunas de Chave Estrangeira
-    aluno_id = Column(Integer, ForeignKey('alunos.id'))
-    modalidade_id = Column(Integer, ForeignKey('modalidades.id'))
-    
-    # Novas colunas de dados específicos da matrícula
-    numero_matricula = Column(String, unique=True) # Ex: M-JJ-2024-001
-    data_inicio = Column(Date)
-    graduacao = Column(String, default="Iniciante") # Ex: Faixa Branca, Faixa Azul, Nível 1
-    
-    # Relações (para acessar os dados do Aluno e da Modalidade)
-    aluno = relationship("Aluno", back_populates="matriculas_modalidades")
-    modalidade = relationship("Modalidade", back_populates="matriculas_modalidades")
-    
-    # Restrição de unicidade: Um aluno não pode ter duas matrículas na mesma modalidade
-    __table_args__ = (UniqueConstraint('aluno_id', 'modalidade_id', name='_aluno_modalidade_uc'),)
-
-    def __repr__(self):
-        return f"<Matricula(matr='{self.numero_matricula}', aluno_id={self.aluno_id}, mod_id={self.modalidade_id})>"
-
-
-# =========================================================================
-# 4. Tabela de ALUNOS (ATLETAS)
-# =========================================================================
-class Aluno(Base):
-    __tablename__ = 'alunos'
-    id = Column(Integer, primary_key=True)
-    nome_completo = Column(String)
-    data_nascimento = Column(Date)
-    cpf = Column(String, unique=True) 
-    status_ativo = Column(Boolean, default=True)
-    academia_id = Column(Integer, ForeignKey('academias.id'))
-    
-    academia = relationship("Academia", back_populates="alunos")
-    
-    # NOVA RELAÇÃO: Permite acessar todas as matrículas do aluno
-    matriculas_modalidades = relationship("MatriculaModalidade", back_populates="aluno")
-    
-    @property
-    def cpf_formatado(self):
-        """Retorna o CPF no formato 000.000.000-00 para exibição."""
-        if self.cpf and len(self.cpf) == 11 and self.cpf.isdigit():
-            return f"{self.cpf[:3]}.{self.cpf[3:6]}.{self.cpf[6:9]}-{self.cpf[9:]}"
-        return self.cpf 
-
-    def __repr__(self):
-        return f"<Aluno(nome='{self.nome_completo}', CPF='{self.cpf_formatado}')>"
-
-
-# =========================================================================
-# 5. Tabela de MODALIDADES (LUTAS / ESPORTES)
-# =========================================================================
 class Modalidade(Base):
     __tablename__ = 'modalidades'
-    id = Column(Integer, primary_key=True)
-    nome = Column(String, unique=True)
-    tipo = Column(String) 
-
-    treinadores = relationship("Treinador", back_populates="modalidade")
     
-    # NOVA RELAÇÃO: Permite acessar todos os alunos matriculados nesta modalidade
-    matriculas_modalidades = relationship("MatriculaModalidade", back_populates="modalidade")
-
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(50), unique=True, nullable=False)
+    tipo = Column(String(50), nullable=True) # Ex: Base, Alto Rendimento
+    
+    # Relacionamento 1:N com Treinador (Uma modalidade tem muitos treinadores)
+    treinadores = relationship("Treinador", back_populates="modalidade", cascade="all, delete-orphan")
+    
     def __repr__(self):
-        return f"<Modalidade(id={self.id}, nome='{self.nome}')>"
+        return f"<Modalidade(nome='{self.nome}')>"
 
 
-# =========================================================================
-# 6. Tabela de TREINADORES / PROFESSORES
-# =========================================================================
+class Aluno(Base):
+    __tablename__ = 'alunos'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome_completo = Column(String(150), nullable=False)
+    data_nascimento = Column(Date, nullable=False)
+    cpf_formatado = Column(String(14), unique=True, nullable=False) # Ex: 000.000.000-00
+    cpf_limpo = Column(String(11), unique=True, nullable=False, index=True) # Apenas números para busca
+    status_ativo = Column(Boolean, default=True)
+    data_cadastro = Column(Date, default=date.today)
+    
+    # Chave Estrangeira: Associa a Academia (Polo)
+    academia_id = Column(Integer, ForeignKey('academias.id'), nullable=False)
+    
+    # Relacionamentos
+    # N:1 com Academia
+    academia = relationship("Academia", back_populates="alunos")
+    
+    # 1:N com Matrícula (Um aluno pode ter várias matrículas)
+    matriculas = relationship("Matricula", back_populates="aluno", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Aluno(nome='{self.nome_completo}', cpf={self.cpf_limpo})>"
+
+
+class Matricula(Base):
+    __tablename__ = 'matriculas'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    numero_matricula = Column(String(50), unique=True, nullable=False)
+    graduacao = Column(String(50), nullable=False) # Ex: Branca, Azul, Nível 1
+    data_matricula = Column(Date, default=date.today)
+    
+    # Chaves Estrangeiras
+    aluno_id = Column(Integer, ForeignKey('alunos.id'), nullable=False)
+    modalidade_id = Column(Integer, ForeignKey('modalidades.id'), nullable=False)
+
+    # Relacionamentos
+    # N:1 com Aluno
+    aluno = relationship("Aluno", back_populates="matriculas")
+    # N:1 com Modalidade
+    modalidade = relationship("Modalidade") 
+    
+    def __repr__(self):
+        return f"<Matricula(num='{self.numero_matricula}', aluno_id={self.aluno_id})>"
+
+
 class Treinador(Base):
     __tablename__ = 'treinadores'
-    id = Column(Integer, primary_key=True)
-    nome_completo = Column(String)
-    telefone = Column(String)
-    certificacao = Column(String)
     
-    academia_id = Column(Integer, ForeignKey('academias.id'))
-    modalidade_id = Column(Integer, ForeignKey('modalidades.id'))
+    id = Column(Integer, primary_key=True, index=True)
+    nome_completo = Column(String(150), nullable=False)
+    telefone = Column(String(20), nullable=True)
+    certificacao = Column(String(100), nullable=True)
     
-    academia = relationship("Academia")
-    modalidade = relationship("Modalidade", back_populates="treinadores")
-
+    # Chaves Estrangeiras
+    academia_id = Column(Integer, ForeignKey('academias.id'), nullable=False)
+    modalidade_id = Column(Integer, ForeignKey('modalidades.id'), nullable=False)
+    
+    # Relacionamentos
+    academia = relationship("Academia") # N:1 com Academia
+    modalidade = relationship("Modalidade", back_populates="treinadores") # N:1 com Modalidade
+    
     def __repr__(self):
-        return f"<Treinador(nome='{self.nome_completo}', modalidade_id={self.modalidade_id})>"
-    
-# =========================================================================
-# 7. Tabela de USUÁRIOS (Para Login e Permissão)
-# =========================================================================
+        return f"<Treinador(nome='{self.nome_completo}', mod={self.modalidade_id})>"
+
+
 class Usuario(Base):
     __tablename__ = 'usuarios'
-    id = Column(Integer, primary_key=True)
-    nome_usuario = Column(String, unique=True, nullable=False)
-    # A senha será armazenada como um hash bcrypt (bytes)
-    senha_hash = Column('senha_hash', String) 
-    # CAMPO DE PERMISSÃO: Define o nível de acesso (ADMIN, EDITOR, VIEWER)
-    papel = Column(String, default="VIEWER") 
-
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome_usuario = Column(String(50), unique=True, nullable=False)
+    senha_hash = Column(String(255), nullable=False)
+    # Papel: ADMIN, EDITOR, VIEWER
+    papel = Column(String(50), default="VIEWER", nullable=False) 
+    
     def __repr__(self):
-        return f"<Usuario(nome='{self.nome_usuario}', papel='{self.papel}')>"
+        return f"<Usuario(user='{self.nome_usuario}', papel='{self.papel}')>"
 
-# ... (código posterior, incluindo a função create_database_tables) ...
+
+# --- 3. Função de Criação de Tabelas ---
+
+def create_database_tables():
+    """Cria todas as tabelas definidas em Base no banco de dados."""
+    # O comando Base.metadata.create_all(engine) só cria as tabelas se elas não existirem
+    Base.metadata.create_all(bind=engine)
+    print("Banco de dados e tabelas criadas/atualizadas com sucesso!")
+
+# Se você precisar rodar este script sozinho para criar o banco:
+# if __name__ == '__main__':
+#     create_database_tables()

@@ -5,8 +5,10 @@ from aluno_service import (
     cadastrar_aluno, 
     buscar_aluno_por_cpf, 
     listar_alunos_por_academia, 
+    listar_todos_alunos, 
     atualizar_status_aluno, 
-    deletar_aluno
+    deletar_aluno,
+    buscar_aluno_por_id, 
 )
 from academia_service import (
     cadastrar_academia,
@@ -34,13 +36,14 @@ from auth_service import (
     autenticar_usuario, 
     inicializar_usuario_admin,
     registrar_usuario,
-    checar_permissao, # NOVO: Para verificar os 3 níveis
+    checar_permissao,
     listar_usuarios,
     atualizar_papel_usuario,
     deletar_usuario
 )
 import sys
 import re
+from datetime import date 
 
 # Variável global para armazenar o ID da Academia de teste
 ACADEMIA_ID_TESTE = None 
@@ -59,23 +62,34 @@ def inicializar_sistema():
     """Garante que o banco de dados e as tabelas existam e configura a academia de teste e usuários."""
     global ACADEMIA_ID_TESTE
     
-    print("--- Inicializando Sistema Maricá Esportes ---")
-    create_database_tables()
+    print("--- Inicializando Sistema Secretaria de Lutas ---")
+    
+    # IMPORTANTE: Garante que as tabelas sejam criadas ANTES de qualquer consulta.
+    create_database_tables() 
     
     # GARANTE A EXISTÊNCIA DE UMA ACADEMIA PARA TESTES
     session = Session()
     academia_teste = session.query(Academia).filter_by(nome="Polo Esportivo de Inoã").first()
+    
+    # Lógica de criação da academia de teste
     if not academia_teste:
         print("Criando Academia de Teste (Polo Esportivo de Inoã)...")
-        academia_teste = Academia(nome="Polo Esportivo de Inoã", endereco="Rua X", responsavel="João da Silva")
-        session.add(academia_teste)
-        session.commit()
+        try:
+            academia_teste = Academia(id=1, nome="Polo Esportivo de Inoã", endereco="Rua X", responsavel="João da Silva")
+            session.add(academia_teste)
+            session.commit()
+        except Exception:
+             session.rollback()
+             academia_teste = session.query(Academia).filter_by(nome="Polo Esportivo de Inoã").first() 
+             if not academia_teste:
+                 academia_teste = Academia(nome="Polo Esportivo de Inoã", endereco="Rua X", responsavel="João da Silva")
+                 session.add(academia_teste)
+                 session.commit()
     
     ACADEMIA_ID_TESTE = academia_teste.id
     session.close()
     
     print(f"ID da Academia de Teste: {ACADEMIA_ID_TESTE}")
-    # Garante que o usuário 'juan' ADMIN exista
     inicializar_usuario_admin() 
     print("---------------------------------------------")
 
@@ -87,26 +101,27 @@ def tela_de_login():
     MAX_TENTATIVAS = 3
     tentativas = 0
     
-    # Se ainda não houver usuário (situação raríssima após inicialização), oferece registro
     session = Session()
+    # Verifica se existe pelo menos um usuário no BD recém-criado
     if session.query(Usuario).count() == 0:
         print("\nALERTA: Nenhum usuário encontrado. Registre o primeiro usuário para acessar.")
         nome = input("Definir Novo Usuário: ")
         senha = input("Definir Nova Senha: ")
-        registrar_usuario(nome, senha, papel="ADMIN") # Primeiro usuário deve ser ADMIN
+        # Garante a criação do ADMIN inicial, caso não exista
+        registrar_usuario(nome, senha, papel="ADMIN") 
     session.close()
 
     while tentativas < MAX_TENTATIVAS:
         print("\n==============================================")
-        print("          ACESSO RESTRITO - LOGIN")
+        print("          ACESSO RESTRITO - LOGIN")
         print("==============================================")
         
         usuario_input = input("Usuário: ")
         senha_input = input("Senha: ")
         
         if autenticar_usuario(usuario_input, senha_input):
-            USUARIO_LOGADO = usuario_input # Salva o usuário para checagem de permissão
-            print("\nAcesso concedido. Bem-vindo!")
+            USUARIO_LOGADO = usuario_input 
+            print(f"\nAcesso concedido. Bem-vindo {USUARIO_LOGADO}!")
             return True 
         else:
             tentativas += 1
@@ -120,7 +135,7 @@ def tela_de_login():
 
 def exibir_menu_principal():
     print("\n==============================================")
-    print("      SISTEMA DE GESTÃO - SECRETARIA DE LUTAS")
+    print("      SISTEMA DE GESTÃO - SECRETARIA DE LUTAS")
     print("==============================================")
     print("1. Gerenciar Alunos")
     print("2. Gerenciar Academias/Polos")
@@ -133,14 +148,14 @@ def exibir_menu_principal():
 
 
 def executar_menu_alunos():
-    """Menu para CRUD de Alunos. Deleção restrita a ADMIN."""
+    """Menu para CRUD de Alunos, incluindo a nova opção de detalhe por ID."""
     while True:
         print("\n[ GERENCIAMENTO DE ALUNOS ]")
         print("1. Cadastrar Novo Aluno")
-        print("2. Listar Alunos Ativos")
+        print("2. Listar TODOS os Alunos Cadastrados (Ativos/Inativos)") 
         print("3. Buscar Aluno por CPF")
         print("4. Mudar Status")
-        print("5. Remover Aluno (ADMIN)") # Alteração
+        print("5. Remover Aluno (ADMIN)") 
         print("9. Voltar ao Menu Principal")
         try:
             opcao = input("Escolha uma opção: ")
@@ -159,19 +174,71 @@ def executar_menu_alunos():
                 
                 cadastrar_aluno(nome, data_nasc_str, cpf_input, ACADEMIA_ID_TESTE)
 
+
             elif opcao == '2':
-                alunos = listar_alunos_por_academia(ACADEMIA_ID_TESTE)
-                print(f"Total de Alunos Ativos: {len(alunos)}")
-                for aluno in alunos:
-                    print(f"  ID: {aluno.id} | Nome: {aluno.nome_completo} | CPF: {aluno.cpf_formatado}")
+                alunos = listar_todos_alunos() 
+                
+                print(f"Total de Alunos Encontrados: {len(alunos)}")
+                if alunos:
+                    print("ID  | Status  | CPF            | Nome")
+                    print("----|---------|-----------------|---------------------------------")
+                    for aluno in alunos:
+                        status_str = "ATIVO " if aluno.status_ativo else "INATIVO"
+                        print(f"{aluno.id:<3} | {status_str:<7} | {aluno.cpf_formatado} | {aluno.nome_completo}")
+                        
+                    # ------------------------------------------------------------------
+                    # FUNCIONALIDADE DE VISUALIZAÇÃO DE DETALHES POR ID
+                    # ------------------------------------------------------------------
+                    while True:
+                        try:
+                            id_aluno_detalhe = input("\n[DETALHES] Digite o ID do aluno para ver as informações (0 para voltar): ")
+                            id_aluno_detalhe = int(id_aluno_detalhe)
+                            
+                            if id_aluno_detalhe == 0:
+                                break
+                                
+                            aluno = buscar_aluno_por_id(id_aluno_detalhe) 
+                            
+                            if aluno:
+                                print("\n--- INFORMAÇÕES COMPLETAS DO ALUNO ---")
+                                print(f"  ID: {aluno.id}")
+                                print(f"  Nome Completo: {aluno.nome_completo}")
+                                print(f"  CPF: {aluno.cpf_formatado}")
+                                print(f"  Data de Nascimento: {aluno.data_nascimento.strftime('%d/%m/%Y')}")
+                                print(f"  Status: {'ATIVO' if aluno.status_ativo else 'INATIVO'}")
+                                
+                                # Detalhes da Academia
+                                if aluno.academia:
+                                    print(f"  Academia/Polo: {aluno.academia.nome} (ID: {aluno.academia_id})")
+                                else:
+                                    print("  Academia/Polo: Não associado")
+                                    
+                                # Detalhes das Matrículas
+                                if aluno.matriculas:
+                                    print("  --- MATRÍCULAS ---")
+                                    for mat in aluno.matriculas:
+                                        print(f"    - Nº: {mat.numero_matricula} | Modalidade: {mat.modalidade.nome} | Graduação: {mat.graduacao}")
+                                else:
+                                    print("  Matrículas: Nenhuma")
+                                print("--------------------------------------")
+                            else:
+                                print(f"ERRO: Aluno com ID {id_aluno_detalhe} não encontrado.")
+                                
+                        except ValueError:
+                            print("Entrada inválida. Por favor, digite um número inteiro.")
+                        except Exception as e:
+                            print(f"Ocorreu um erro ao buscar detalhes: {e}")
+                    # ------------------------------------------------------------------
+                else:
+                    print("Nenhum aluno cadastrado no banco de dados.")
 
             elif opcao == '3':
                 cpf_busca = input("Digite o CPF para busca: ")
                 aluno = buscar_aluno_por_cpf(cpf_busca)
                 if aluno:
-                    print(f"  Encontrado: {aluno.nome_completo} | Status: {'ATIVO' if aluno.status_ativo else 'INATIVO'} | Academia: {aluno.academia.nome}")
+                    print(f"  Encontrado: {aluno.nome_completo} | Status: {'ATIVO' if aluno.status_ativo else 'INATIVO'} | Academia: {aluno.academia.nome}")
                 else:
-                    print(f"  Aluno com CPF {limpar_cpf(cpf_busca)} não encontrado.")
+                    print(f"  Aluno com CPF {limpar_cpf(cpf_busca)} não encontrado.")
 
             elif opcao == '4':
                 cpf_busca = input("CPF do aluno: ")
@@ -179,7 +246,6 @@ def executar_menu_alunos():
                 atualizar_status_aluno(cpf_busca, True if novo_status == 'A' else False)
             
             elif opcao == '5':
-                # Checagem de permissão de deleção
                 PAPEIS_PERMITIDOS = ["ADMIN"] 
                 if not checar_permissao(USUARIO_LOGADO, PAPEIS_PERMITIDOS):
                     print("PERMISSÃO NEGADA: Apenas ADMIN pode remover alunos.")
@@ -204,7 +270,7 @@ def executar_menu_academias():
         print("1. Cadastrar Novo Polo")
         print("2. Listar Todos os Polos")
         print("3. Atualizar Endereço/Responsável")
-        print("4. Remover Polo (ADMIN)") # Alteração
+        print("4. Remover Polo (ADMIN)")
         print("9. Voltar ao Menu Principal")
         try:
             opcao = input("Escolha uma opção: ")
@@ -219,7 +285,7 @@ def executar_menu_academias():
                 academias = listar_todas_academias()
                 print(f"Total de Polos Cadastrados: {len(academias)}")
                 for ac in academias:
-                    print(f"  ID: {ac.id} | Nome: {ac.nome} | Responsável: {ac.responsavel}")
+                    print(f"  ID: {ac.id} | Nome: {ac.nome} | Responsável: {ac.responsavel}")
 
             elif opcao == '3':
                 ac_id = int(input("ID do Polo que deseja atualizar: "))
@@ -229,7 +295,6 @@ def executar_menu_academias():
                 atualizar_academia(ac_id, endereco=novo_end or None, responsavel=novo_resp or None)
             
             elif opcao == '4':
-                # Checagem de permissão de deleção
                 PAPEIS_PERMITIDOS = ["ADMIN"] 
                 if not checar_permissao(USUARIO_LOGADO, PAPEIS_PERMITIDOS):
                     print("PERMISSÃO NEGADA: Apenas ADMIN pode remover polos/academias.")
@@ -257,7 +322,7 @@ def executar_menu_modalidades_treinadores():
         print("2. Listar Modalidades")
         print("3. Cadastrar Treinador")
         print("4. Listar Treinadores por Modalidade")
-        print("5. Remover Treinador (ADMIN)") # Alteração
+        print("5. Remover Treinador (ADMIN)")
         print("9. Voltar ao Menu Principal")
         try:
             opcao = input("Escolha uma opção: ")
@@ -271,7 +336,7 @@ def executar_menu_modalidades_treinadores():
                 modalidades = listar_modalidades()
                 print(f"Total de Modalidades: {len(modalidades)}")
                 for mod in modalidades:
-                    print(f"  ID: {mod.id} | Nome: {mod.nome} | Tipo: {mod.tipo}")
+                    print(f"  ID: {mod.id} | Nome: {mod.nome} | Tipo: {mod.tipo}")
 
             elif opcao == '3':
                 nome = input("Nome do Treinador: ")
@@ -290,12 +355,11 @@ def executar_menu_modalidades_treinadores():
                 treinadores = listar_treinadores_por_modalidade(mod_id)
                 if treinadores:
                     for t in treinadores:
-                        print(f"  ID: {t.id} | Nome: {t.nome_completo} | Cert.: {t.certificacao}")
+                        print(f"  ID: {t.id} | Nome: {t.nome_completo} | Cert.: {t.certificacao}")
                 else:
                     print(f"Nenhum treinador encontrado para a modalidade ID {mod_id}.")
             
             elif opcao == '5':
-                # Checagem de permissão de deleção
                 PAPEIS_PERMITIDOS = ["ADMIN"] 
                 if not checar_permissao(USUARIO_LOGADO, PAPEIS_PERMITIDOS):
                     print("PERMISSÃO NEGADA: Apenas ADMIN pode remover treinadores.")
@@ -333,7 +397,7 @@ def executar_menu_matriculas():
                 modalidades = listar_modalidades()
                 print("Modalidades disponíveis:")
                 for mod in modalidades:
-                    print(f"  ID: {mod.id} | Nome: {mod.nome}")
+                    print(f"  ID: {mod.id} | Nome: {mod.nome}")
                 
                 modalidade_id = int(input("ID da Modalidade: "))
                 
@@ -350,7 +414,7 @@ def executar_menu_matriculas():
                 if matriculas:
                     print(f"Matrículas encontradas para o Aluno ID {aluno_id}:")
                     for m in matriculas:
-                        print(f"  > Matrícula: {m.numero_matricula} | Modalidade: {m.modalidade.nome} | Graduação: {m.graduacao}")
+                        print(f"  > Matrícula: {m.numero_matricula} | Modalidade: {m.modalidade.nome} | Graduação: {m.graduacao}")
                 else:
                     print(f"Nenhuma matrícula encontrada para o Aluno ID {aluno_id}.")
 
@@ -390,7 +454,7 @@ def executar_menu_relatorios():
                 resultados = contar_alunos_por_academia()
                 if resultados:
                     for academia, total in resultados.items():
-                        print(f"  > {academia}: {total} alunos ativos")
+                        print(f"  > {academia}: {total} alunos ativos")
                 else:
                     print("Nenhuma academia com alunos ativos encontrada.")
                     
@@ -399,7 +463,7 @@ def executar_menu_relatorios():
                 modalidades = listar_modalidades()
                 print("Modalidades disponíveis:")
                 for mod in modalidades:
-                    print(f"  - {mod.nome}")
+                    print(f"  - {mod.nome}")
                     
                 nome_modalidade = input("Nome da Modalidade: ")
                 graduacao_alvo = input("Graduação (Faixa/Nível) a ser buscada: ")
@@ -409,7 +473,7 @@ def executar_menu_relatorios():
                 if alunos:
                     print(f"Total de {len(alunos)} alunos encontrados em '{nome_modalidade}' ({graduacao_alvo}):")
                     for aluno in alunos:
-                        print(f"  > Matrícula: {aluno['matricula']} | Aluno: {aluno['nome_aluno']} | Polo: {aluno['academia']}")
+                        print(f"  > Matrícula: {aluno['matricula']} | Aluno: {aluno['nome_aluno']} | Polo: {aluno['academia']}")
                 else:
                     print("Nenhum aluno encontrado com esses critérios.")
 
@@ -447,7 +511,7 @@ def executar_menu_usuarios():
                 print("\n--- LISTA DE USUÁRIOS ---")
                 usuarios = listar_usuarios()
                 for u in usuarios:
-                    print(f"  > ID: {u.id} | Usuário: {u.nome_usuario} | Papel: {u.papel}")
+                    print(f"  > ID: {u.id} | Usuário: {u.nome_usuario} | Papel: {u.papel}")
                     
             elif opcao == '2':
                 print("\n--- NOVO USUÁRIO ---")
@@ -486,25 +550,25 @@ if __name__ == '__main__':
     
     inicializar_sistema()
     
+    # --------------------------------------------------------------------------------------
+    # O BLOCO DE TESTE DE INTEGRIDADE DO BD FOI REMOVIDO PARA PRODUÇÃO
+    # --------------------------------------------------------------------------------------
+
     # O sistema de login é a primeira coisa a ser executada
     if tela_de_login():
         
-        # Define os papéis permitidos para realizar CRUD/edição
         PAPEIS_CRUD = ["ADMIN", "EDITOR"]
         
-        # Acesso concedido, entra no loop principal
         while True:
             exibir_menu_principal()
             try:
                 escolha = input("Escolha uma opção: ")
                 
-                # Checagem de Permissão para Menus de CRUD (1 a 4, e 6)
                 if escolha in ['1', '2', '3', '4', '6']:
                     if not checar_permissao(USUARIO_LOGADO, PAPEIS_CRUD):
                         print("\nACESSO NEGADO: Sua permissão é apenas de Visualizador (Opção 5).")
                         continue
 
-                # Rota para Menus
                 if escolha == '1':
                     executar_menu_alunos()
                 elif escolha == '2':
