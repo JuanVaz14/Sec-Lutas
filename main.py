@@ -135,11 +135,11 @@ def tela_de_login():
 
 def exibir_menu_principal():
     print("\n==============================================")
-    print("      SISTEMA DE GESTÃO - SECRETARIA DE LUTAS")
+    print("      SISTEMA DE GESTÃO ")
     print("==============================================")
     print("1. Gerenciar Alunos")
-    print("2. Gerenciar Academias/Polos")
-    print("3. Gerenciar Modalidades e Treinadores")
+    print("2. Gerenciar Academias")
+    print("3. Gerenciar Modalidades e Professores")
     print("4. Gerenciar Matrículas e Graduações")
     print("5. Relatórios Gerenciais (VIEWER)")
     print("6. Gerenciar Usuários (ADMIN)") 
@@ -266,7 +266,7 @@ def executar_menu_alunos():
 def executar_menu_academias():
     """Menu para CRUD de Academias. Deleção restrita a ADMIN."""
     while True:
-        print("\n[ GERENCIAMENTO DE ACADEMIAS/POLOS ]")
+        print("\n[ GERENCIAMENTO DE ACADEMIAS ]")
         print("1. Cadastrar Novo Polo")
         print("2. Listar Todos os Polos")
         print("3. Atualizar Endereço/Responsável")
@@ -317,12 +317,12 @@ def executar_menu_academias():
 def executar_menu_modalidades_treinadores():
     """Menu para CRUD de Modalidades e Treinadores. Deleção restrita a ADMIN."""
     while True:
-        print("\n[ GERENCIAMENTO DE MODALIDADES E TREINADORES ]")
+        print("\n[ GERENCIAMENTO DE MODALIDADES E PROFESSORES ]")
         print("1. Cadastrar Modalidade")
         print("2. Listar Modalidades")
-        print("3. Cadastrar Treinador")
-        print("4. Listar Treinadores por Modalidade")
-        print("5. Remover Treinador (ADMIN)")
+        print("3. Cadastrar Professores")
+        print("4. Listar Professores por Modalidade")
+        print("5. Remover Profezzor (ADMIN)")
         print("9. Voltar ao Menu Principal")
         try:
             opcao = input("Escolha uma opção: ")
