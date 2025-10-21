@@ -1,12 +1,12 @@
 # aluno_service.py
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload, Session # <-- joinedload é necessário para Eager Loading!
+from sqlalchemy.orm import joinedload, Session  # <-- joinedload é necessário para Eager Loading!
 from datetime import datetime
 import re
 
 # Importa as classes do models.py
-from models import Aluno, Academia, Matricula, Modalidade, engine, Session 
+from models import Aluno, Academia, Matricula, Modalidade, engine, Session
 
 # --- Funções Auxiliares ---
 
@@ -16,12 +16,27 @@ def limpar_cpf(cpf: str) -> str:
         return ""
     return re.sub(r'[^0-9]', '', cpf).zfill(11)
 
+def parse_data_nascimento(data_str: str) -> datetime.date:
+    """
+    Tenta converter a string de data em um objeto datetime.date.
+    Suporta formatos: 'DD-MM-YYYY', 'DD/MM/YYYY', 'DDMMYYYY'.
+    """
+    formatos = ["%d-%m-%Y", "%d/%m/%Y", "%d%m%Y"]
+    
+    for formato in formatos:
+        try:
+            return datetime.strptime(data_str, formato).date()
+        except ValueError:
+            continue
+    
+    raise ValueError("Formato de data inválido. Use DDMMYYYY, DD-MM-YYYY ou DD/MM/YYYY.")
+
 # ==============================================================================
 # OPERAÇÕES CRUD DE ALUNOS
 # ==============================================================================
 
 # -----------------
-# C: CREATE (CADASTRAR) - CORRIGIDA PARA EVITAR DetachedInstanceError NO MAIN
+# C: CREATE (CADASTRAR)
 # -----------------
 
 def cadastrar_aluno(nome: str, data_nasc: str, cpf: str, academia_id: int) -> Aluno | None:
@@ -31,7 +46,7 @@ def cadastrar_aluno(nome: str, data_nasc: str, cpf: str, academia_id: int) -> Al
     
     try:
         # 1. Validação de Dados
-        data_nascimento = datetime.strptime(data_nasc, '%Y-%m-%d').date()
+        data_nascimento = parse_data_nascimento(data_nasc)
         
         # 2. Checa se o CPF já existe
         if session.query(Aluno).filter(Aluno.cpf_limpo == cpf_limpo).first():
@@ -42,29 +57,26 @@ def cadastrar_aluno(nome: str, data_nasc: str, cpf: str, academia_id: int) -> Al
         novo_aluno = Aluno(
             nome_completo=nome,
             data_nascimento=data_nascimento,
-            cpf_formatado=cpf, # Salva o CPF com a formatação original
-            cpf_limpo=cpf_limpo, # Salva o CPF limpo para buscas
-            academia_id=academia_id, # Associa à academia
-            status_ativo=True # Começa ativo
+            cpf_formatado=cpf,        # Salva o CPF com a formatação original
+            cpf_limpo=cpf_limpo,      # Salva o CPF limpo para buscas
+            academia_id=academia_id,  # Associa à academia
+            status_ativo=True         # Começa ativo
         )
         
         session.add(novo_aluno)
         session.commit()
 
         # >>>>>> CORREÇÃO CRÍTICA PARA DetachedInstanceError NO MAIN <<<<<<
-        # Acessa os atributos ANTES de fechar a sessão. 
-        # Isso garante que eles sejam carregados e 'cached' no objeto Aluno.
-        # Caso contrário, ao tentar imprimir no main, ele tentará um 'refresh' 
-        # e falhará, pois a sessão estará fechada.
         nome_cache = novo_aluno.nome_completo 
         cpf_cache = novo_aluno.cpf_formatado
-        
-        print(f"SUCESSO: Aluno '{nome_cache}' cadastrado. CPF: {cpf_cache}.")
+        data_formatada = novo_aluno.data_nascimento.strftime("%d-%m-%Y")
+
+        print(f"SUCESSO: Aluno '{nome_cache}' cadastrado. CPF: {cpf_cache}. Data de Nascimento: {data_formatada}.")
         return novo_aluno
 
-    except ValueError:
+    except ValueError as ve:
         session.rollback()
-        print("ERRO: Formato de Data de Nascimento inválido. Use AAAA-MM-DD.")
+        print(f"ERRO: {ve}")
         return None
     except IntegrityError:
         session.rollback()
@@ -85,7 +97,6 @@ def listar_todos_alunos() -> list[Aluno]:
     """Retorna uma lista de TODOS os alunos cadastrados (ativos e inativos)."""
     session = Session()
     try:
-        # Retorna todos os alunos ordenados pelo nome
         alunos = session.query(Aluno).order_by(Aluno.nome_completo).all()
         return alunos
     finally:
@@ -105,15 +116,12 @@ def buscar_aluno_por_id(aluno_id: int) -> Aluno | None:
     """
     Busca um aluno específico pelo ID, carregando (EAGERLY) a Academia 
     e as Matrículas para evitar o Detached Instance Error.
-    (Essa correção já havia sido feita anteriormente.)
     """
     session = Session()
     try:
-        # Usa .options(joinedload(...)) para carregar os relacionamentos na mesma query.
         aluno = session.query(Aluno).options(
-            joinedload(Aluno.academia),      # Carrega a Academia junto
-            # Carrega Matriculas e, dentro delas, a Modalidade
-            joinedload(Aluno.matriculas).joinedload(Matricula.modalidade) 
+            joinedload(Aluno.academia),
+            joinedload(Aluno.matriculas).joinedload(Matricula.modalidade)
         ).filter(Aluno.id == aluno_id).first()
         
         return aluno
@@ -122,7 +130,6 @@ def buscar_aluno_por_id(aluno_id: int) -> Aluno | None:
         return None
     finally:
         session.close()
-
 
 def listar_alunos_por_academia(academia_id: int) -> list[Aluno]:
     """Retorna uma lista de alunos ATIVOS de uma academia específica."""
@@ -135,7 +142,6 @@ def listar_alunos_por_academia(academia_id: int) -> list[Aluno]:
         return alunos
     finally:
         session.close()
-
 
 # -----------------
 # U: UPDATE (ATUALIZAR)

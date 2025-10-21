@@ -170,7 +170,7 @@ def executar_menu_alunos():
                     print("ALERTA: CPF inválido. Certifique-se de que possui 11 dígitos numéricos.")
                     continue
                     
-                data_nasc_str = input("Data de Nascimento (AAAA-MM-DD): ")
+                data_nasc_str = input("Data de Nascimento (DD-MM-AAAA): ")
                 
                 cadastrar_aluno(nome, data_nasc_str, cpf_input, ACADEMIA_ID_TESTE)
 

@@ -4,7 +4,7 @@ from typing import List
 
 # --- C: CREATE (Cadastrar Nova Academia/Polo) ---
 def cadastrar_academia(nome: str, endereco: str, responsavel: str) -> Academia | None:
-    """Cadastra um novo polo/academia no banco de dados."""
+    """Cadastra um novo polo de academia no banco de dados."""
     session = Session()
     try:
         # Verifica se já existe uma academia com o mesmo nome
