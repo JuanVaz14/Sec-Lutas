@@ -1,7 +1,8 @@
 # matricula_service.py
 
-from models import Aluno, Modalidade, Matricula, Session 
+from typing import List, Optional
 from sqlalchemy.exc import IntegrityError
+from models import Aluno, Modalidade, Matricula, Session 
 from datetime import date
 
 # ==============================================================================
@@ -12,53 +13,33 @@ from datetime import date
 # C: CREATE (MATRICULAR)
 # -----------------
 
-def matricular_aluno(aluno_id: int, modalidade_id: int, numero_matricula: str, graduacao_inicial: str) -> Matricula | None:
-    """Matricula um aluno em uma modalidade específica."""
+def matricular_aluno(aluno_id: int, modalidade_id: int, graduacao: str) -> bool:
+    """Cria uma matrícula definindo numero_matricula como o ID do aluno."""
     session = Session()
     try:
-        # 1. Validação: Checa se Aluno e Modalidade existem
-        aluno = session.get(Aluno, aluno_id)
-        modalidade = session.get(Modalidade, modalidade_id)
-        
-        if not aluno:
-            print(f"ERRO: Aluno com ID {aluno_id} não encontrado.")
-            return None
-        if not modalidade:
-            print(f"ERRO: Modalidade com ID {modalidade_id} não encontrada.")
-            return None
+        # Verifica existência de aluno e modalidade
+        aluno = session.query(Aluno).filter_by(id=aluno_id).one_or_none()
+        modalidade = session.query(Modalidade).filter_by(id=modalidade_id).one_or_none()
+        if not aluno or not modalidade:
+            return False
 
-        # 2. Checa se o aluno já está matriculado nesta modalidade
-        matricula_existente = session.query(Matricula).filter(
-            Matricula.aluno_id == aluno_id,
-            Matricula.modalidade_id == modalidade_id
-        ).first()
-        
-        if matricula_existente:
-            print(f"ALERTA: O aluno {aluno.nome_completo} já está matriculado na modalidade {modalidade.nome}.")
-            return None
+        numero_matricula = str(aluno_id)  # conforme solicitado: matrícula = ID do aluno
 
-        # 3. Cria a nova Matrícula
-        nova_matricula = Matricula(
-            aluno_id=aluno_id,
-            modalidade_id=modalidade_id,
+        nova = Matricula(
             numero_matricula=numero_matricula,
-            graduacao=graduacao_inicial,
-            data_matricula=date.today()
+            graduacao=graduacao,
+            aluno_id=aluno_id,
+            modalidade_id=modalidade_id
         )
-        
-        session.add(nova_matricula)
+        session.add(nova)
         session.commit()
-        print(f"SUCESSO: Matrícula {numero_matricula} criada para {aluno.nome_completo} em {modalidade.nome}.")
-        return nova_matricula
-
+        return True
     except IntegrityError:
         session.rollback()
-        print("ERRO: O número de matrícula informado já existe.")
-        return None
-    except Exception as e:
+        return False
+    except Exception:
         session.rollback()
-        print(f"ERRO ao matricular aluno: {e}")
-        return None
+        return False
     finally:
         session.close()
 
@@ -66,16 +47,10 @@ def matricular_aluno(aluno_id: int, modalidade_id: int, numero_matricula: str, g
 # R: READ (BUSCAR/LISTAR)
 # -----------------
 
-def listar_matriculas_aluno(aluno_id: int) -> list[Matricula]:
-    """Lista todas as matrículas de um aluno específico."""
+def listar_matriculas_aluno(aluno_id: int) -> List[Matricula]:
     session = Session()
     try:
-        # Carrega a modalidade junto para evitar erro de Lazy Loading no main.py
-        matriculas = session.query(Matricula).filter(Matricula.aluno_id == aluno_id).all()
-        return matriculas
-    except Exception as e:
-        print(f"ERRO ao listar matrículas do aluno {aluno_id}: {e}")
-        return []
+        return session.query(Matricula).filter_by(aluno_id=aluno_id).all()
     finally:
         session.close()
 
@@ -85,29 +60,17 @@ def listar_matriculas_aluno(aluno_id: int) -> list[Matricula]:
 # -----------------
 
 def atualizar_graduacao(aluno_id: int, modalidade_id: int, nova_graduacao: str) -> bool:
-    """Atualiza a graduação (faixa/nível) de uma matrícula existente."""
     session = Session()
     try:
-        matricula = session.query(Matricula).filter(
-            Matricula.aluno_id == aluno_id,
-            Matricula.modalidade_id == modalidade_id
-        ).first()
-        
-        if matricula:
-            nome_aluno = session.get(Aluno, aluno_id).nome_completo # Busca nome para feedback
-            nome_modalidade = session.get(Modalidade, modalidade_id).nome # Busca modalidade para feedback
-
-            matricula.graduacao = nova_graduacao
-            session.commit()
-            print(f"SUCESSO: Graduação de {nome_aluno} em {nome_modalidade} atualizada para '{nova_graduacao}'.")
-            return True
-        else:
-            print("ALERTA: Matrícula não encontrada para o aluno/modalidade especificados.")
+        matricula = session.query(Matricula).filter_by(aluno_id=aluno_id, modalidade_id=modalidade_id).one_or_none()
+        if not matricula:
             return False
-            
-    except Exception as e:
+        matricula.graduacao = nova_graduacao
+        session.add(matricula)
+        session.commit()
+        return True
+    except Exception:
         session.rollback()
-        print(f"ERRO ao atualizar graduação: {e}")
         return False
     finally:
         session.close()

@@ -124,5 +124,12 @@ def deletar_usuario(nome_usuario: str) -> bool:
         session.close()
 
 def checar_permissao(usuario: Usuario, papel_necessario: str) -> bool:
-    """Checa se o usuário tem o papel necessário."""
-    return usuario.papel.upper() == papel_necessario.upper()
+    """Retorna True se o usuário tem o papel necessário.
+    Usuário ADMIN tem acesso a tudo."""
+    if usuario is None:
+        return False
+    papel_atual = (usuario.papel or "").upper()
+    papel_necessario = (papel_necessario or "").upper()
+    if papel_atual == "ADMIN":
+        return True
+    return papel_atual == papel_necessario

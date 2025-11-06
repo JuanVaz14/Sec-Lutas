@@ -1,0 +1,23 @@
+2025-11-05 20:16:02,852 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:16:04,313 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:16:05,378 - WARNING - Acesso negado: juan tentava acessar 'menu_academias'
+2025-11-05 20:16:07,774 - WARNING - Acesso negado: juan tentava acessar 'menu_modalidades_treinadores'
+2025-11-05 20:16:08,681 - WARNING - Acesso negado: juan tentava acessar 'menu_modalidades_treinadores'
+2025-11-05 20:16:09,659 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:21:17,051 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:21:18,583 - WARNING - Acesso negado: juan tentava acessar 'menu_academias'
+2025-11-05 20:21:19,442 - WARNING - Acesso negado: juan tentava acessar 'menu_modalidades_treinadores'
+2025-11-05 20:21:20,225 - WARNING - Acesso negado: juan tentava acessar 'menu_matriculas'
+2025-11-05 20:21:20,806 - WARNING - Acesso negado: juan tentava acessar 'menu_relatorios'
+2025-11-05 20:23:14,051 - INFO - Usuário 2 registrado por juan
+2025-11-05 20:23:24,217 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:23:25,209 - WARNING - Acesso negado: juan tentava acessar 'menu_alunos'
+2025-11-05 20:23:36,899 - WARNING - Acesso negado: juan tentava acessar 'menu_relatorios'
+2025-11-05 20:23:38,048 - WARNING - Acesso negado: juan tentava acessar 'menu_relatorios'
+2025-11-05 20:23:41,386 - WARNING - Acesso negado: juan tentava acessar 'menu_matriculas'
+2025-11-05 20:27:02,338 - INFO - DEBUG: usuário=juan papel=ADMIN requer=VIEWER
+2025-11-05 20:27:02,353 - INFO - DEBUG: checar_permissao result=True
+2025-11-05 20:27:09,206 - INFO - DEBUG: usuário=juan papel=ADMIN requer=VIEWER
+2025-11-05 20:27:09,206 - INFO - DEBUG: checar_permissao result=True
+2025-11-05 20:27:15,696 - INFO - DEBUG: usuário=juan papel=ADMIN requer=VIEWER
+2025-11-05 20:27:15,696 - INFO - DEBUG: checar_permissao result=True
