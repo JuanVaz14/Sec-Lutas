@@ -5,8 +5,8 @@ import os
 
 # --- INFORMAÇÃO DE REDE DO SEU PC (FIXA) ---
 # Se o seu IP mudar, você terá que atualizar este arquivo.
-LOCAL_IP = "192.168.200.112"
-PORT = os.environ.get('FLASK_RUN_PORT', 5000)
+LOCAL_IP = "192.168.200.103"
+PORT = os.environ.get('FLASK_RUN_PORT', 20243)
 
 if __name__ == '__main__':
     

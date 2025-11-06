@@ -5,7 +5,7 @@ def limpar_cpf(cpf: str) -> str:
     return re.sub(r'[^0-9]', '', cpf).zfill(11) # Limpa e garante 11 dígitos
 
 def formatar_telefone(tel: str) -> str:
-    """Formata um telefone (11 dígitos) para o padrão (DD)DDDDD-DDDD."""
+    """Formata um telefone (11 dígitos) para o padrão (21)DDDDD-DDDD."""
     tel_limpo = re.sub(r'[^0-9]', '', tel)
     if len(tel_limpo) == 11:
         return f"({tel_limpo[:2]}){tel_limpo[2:7]}-{tel_limpo[7:]}"
