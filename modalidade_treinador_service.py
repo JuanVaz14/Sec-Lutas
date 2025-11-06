@@ -2,25 +2,25 @@
 
 from models import Modalidade, Treinador, Session
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from typing import List
+from typing import List, Optional
 
 # --- C R U D - MODALIDADES ---
 
-def cadastrar_modalidade(nome: str, tipo: str) -> Modalidade | None:
+def cadastrar_modalidade(nome: str, tipo: str = "Base") -> Optional[Modalidade]:
     """Cadastra uma nova modalidade (luta/esporte) no banco de dados."""
     session = Session()
     try:
         if session.query(Modalidade).filter_by(nome=nome).first():
-            print(f"ERRO: Modalidade '{nome}' já está cadastrada.")
+            print(f"❌ ERRO: Modalidade '{nome}' já está cadastrada.")
             return None
             
         nova_modalidade = Modalidade(nome=nome, tipo=tipo)
         session.add(nova_modalidade)
         session.commit()
-        print(f"SUCESSO: Modalidade '{nome}' cadastrada. Tipo: {tipo}.")
+        print(f"✅ SUCESSO: Modalidade '{nome}' cadastrada. Tipo: {tipo}.")
         return nova_modalidade
     except IntegrityError:
-        print("ERRO: Falha ao cadastrar modalidade.")
+        print("❌ ERRO: Falha ao cadastrar modalidade.")
         session.rollback()
         return None
     finally:
@@ -36,12 +36,10 @@ def listar_modalidades() -> List[Modalidade]:
 
 # --- C R U D - TREINADORES ---
 
-def cadastrar_treinador(nome: str, telefone: str, certificacao: str, academia_id: int, modalidade_id: int) -> Treinador | None:
+def cadastrar_treinador(nome: str, modalidade_id: int, telefone: str = "", certificacao: str = "", academia_id: int = 1) -> Optional[Treinador]:
     """Cadastra um novo treinador no banco de dados, associando-o à academia e modalidade."""
     session = Session()
     try:
-        # A validação de FK é feita implicitamente. Se ID for inválida, IntegrityError ocorre.
-        
         novo_treinador = Treinador(
             nome_completo=nome,
             telefone=telefone,
@@ -56,11 +54,11 @@ def cadastrar_treinador(nome: str, telefone: str, certificacao: str, academia_id
         # Para um print mais amigável
         modalidade = session.query(Modalidade).get(modalidade_id)
         
-        print(f"SUCESSO: Treinador '{nome}' cadastrado para {modalidade.nome}.")
+        print(f"✅ SUCESSO: Treinador '{nome}' cadastrado para {modalidade.nome}.")
         return novo_treinador
     
     except IntegrityError:
-        print("ERRO: Falha ao cadastrar treinador. Verifique se as IDs de Academia e Modalidade são válidas.")
+        print("❌ ERRO: Falha ao cadastrar treinador. Verifique se as IDs de Academia e Modalidade são válidas.")
         session.rollback()
         return None
     finally:
@@ -86,10 +84,10 @@ def deletar_treinador(treinador_id: int) -> bool:
         
         session.delete(treinador)
         session.commit()
-        print(f"SUCESSO: Treinador '{nome}' removido.")
+        print(f"✅ SUCESSO: Treinador '{nome}' removido.")
         return True
     except NoResultFound:
-        print(f"ERRO: Treinador com ID {treinador_id} não encontrado para deleção.")
+        print(f"❌ ERRO: Treinador com ID {treinador_id} não encontrado para deleção.")
         session.rollback()
         return False
     finally:

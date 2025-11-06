@@ -1,30 +1,44 @@
-# app.py
+# app.py - VERSÃO CORRIGIDA
 
-# --- Dependências ---
-from dotenv import load_dotenv # Carrega variáveis de ambiente (como SECRET_KEY)
-load_dotenv() 
+from dotenv import load_dotenv
+load_dotenv()
 
-from flask import Flask, render_template_string, redirect, url_for, request, session, flash, get_flashed_messages
-from models import Session, Academia, create_database_tables, Usuario # Importa modelos necessários
+from flask import Flask, render_template_string, redirect, url_for, request, session, flash
+from models import Session as DBSession, Academia, create_database_tables, Usuario
 from academia_service import listar_todas_academias
-from auth_service import autenticar_usuario, inicializar_usuario_admin, checar_permissao
-from aluno_service import (
-    listar_alunos_por_academia, 
-    cadastrar_aluno  # Função para adicionar alunos via web
-)
+from auth_service import autenticar_usuario, inicializar_usuario_admin
+from aluno_service import listar_alunos_por_academia, cadastrar_aluno
 import sys
 import os
 
-# --- Configuração do Flask ---
+# Configuração do Flask
 app = Flask(__name__)
-# Carrega a chave do .env. É obrigatória para o login funcionar.
-app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secreto_caso_o_env_falhe') 
-ACADEMIA_ID_TESTE = 1 # Usaremos o ID 1 para todos os testes CRUD
+app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secreto_caso_o_env_falhe')
+ACADEMIA_ID_TESTE = 1
 
-# --- Funções Auxiliares de HTML/UI ---
+# Função auxiliar para checar permissão (CORRIGIDA)
+def checar_permissao_web(papeis_permitidos):
+    """Verifica se o usuário logado tem uma das permissões necessárias."""
+    if 'usuario' not in session or 'papel' not in session:
+        return False
+    
+    papel_usuario = session.get('papel', '').upper()
+    
+    # ADMIN tem acesso a tudo
+    if papel_usuario == 'ADMIN':
+        return True
+    
+    # Verifica se o papel do usuário está na lista de permitidos
+    papeis_permitidos_upper = [p.upper() for p in papeis_permitidos]
+    
+    # EDITOR tem acesso a VIEWER também
+    if papel_usuario == 'EDITOR' and 'VIEWER' in papeis_permitidos_upper:
+        return True
+    
+    return papel_usuario in papeis_permitidos_upper
 
 def render_page(title, body):
-    # Template base simples para todas as páginas
+    """Template base simples para todas as páginas."""
     return render_template_string("""
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -33,22 +47,134 @@ def render_page(title, body):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{{ title }}</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
-            .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0 0 0 / 10%); }
-            h1 { color: #0066cc; }
-            h2 { border-bottom: 2px solid #ccc; padding-bottom: 5px; }
-            .flash-error { color: red; background-color: #ffe0e0; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
-            .flash-success { color: green; background-color: #e0ffe0; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
-            nav { margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
-            nav a { margin-right: 15px; text-decoration: none; color: #0066cc; }
-            strong { font-weight: bold; }
-            table { border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 0.9em; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+            }
+            .container { 
+                max-width: 1000px; 
+                margin: auto; 
+                background: white; 
+                padding: 30px; 
+                border-radius: 15px; 
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            h1 { 
+                color: #667eea; 
+                margin-bottom: 20px;
+                font-size: 2em;
+            }
+            h2 { 
+                border-bottom: 3px solid #667eea; 
+                padding-bottom: 10px; 
+                margin: 20px 0;
+                color: #333;
+            }
+            .flash-error { 
+                color: #721c24; 
+                background-color: #f8d7da; 
+                border: 1px solid #f5c6cb;
+                padding: 12px; 
+                border-radius: 5px; 
+                margin-bottom: 15px; 
+            }
+            .flash-success { 
+                color: #155724; 
+                background-color: #d4edda; 
+                border: 1px solid #c3e6cb;
+                padding: 12px; 
+                border-radius: 5px; 
+                margin-bottom: 15px; 
+            }
+            nav { 
+                margin-bottom: 25px; 
+                border-bottom: 2px solid #667eea; 
+                padding-bottom: 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            nav a { 
+                margin-right: 20px; 
+                text-decoration: none; 
+                color: #667eea;
+                font-weight: 600;
+                transition: color 0.3s;
+            }
+            nav a:hover {
+                color: #764ba2;
+            }
+            .user-info {
+                font-weight: 600;
+                color: #333;
+            }
+            table { 
+                border-collapse: collapse; 
+                margin-top: 15px; 
+                width: 100%;
+            }
+            th, td { 
+                border: 1px solid #ddd; 
+                padding: 12px; 
+                text-align: left; 
+            }
+            th {
+                background-color: #667eea;
+                color: white;
+                font-weight: 600;
+            }
+            tr:nth-child(even) {
+                background-color: #f8f9fa;
+            }
+            input[type="text"], input[type="password"], input[type="date"] {
+                width: 100%;
+                padding: 10px;
+                margin: 8px 0;
+                border: 2px solid #ddd;
+                border-radius: 5px;
+                font-size: 1em;
+            }
+            input[type="submit"], .btn {
+                padding: 12px 25px;
+                background-color: #667eea;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 1em;
+                font-weight: 600;
+                transition: background-color 0.3s;
+                text-decoration: none;
+                display: inline-block;
+            }
+            input[type="submit"]:hover, .btn:hover {
+                background-color: #764ba2;
+            }
+            .btn-success {
+                background-color: #28a745;
+            }
+            .btn-success:hover {
+                background-color: #218838;
+            }
+            .btn-danger {
+                background-color: #dc3545;
+            }
+            .btn-danger:hover {
+                background-color: #c82333;
+            }
+            label {
+                font-weight: 600;
+                color: #333;
+                display: block;
+                margin-top: 10px;
+            }
         </style>
     </head>
     <body>
         <div class="container">
-            {# Exibe mensagens de feedback (sucesso/erro) #}
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% if messages %}
                 {% for category, message in messages %}
@@ -57,61 +183,61 @@ def render_page(title, body):
               {% endif %}
             {% endwith %}
             
-            {# Menu de navegação superior, visível apenas se logado #}
             {% if session.get('usuario') %}
             <nav>
-                <span>Logado como: <strong>{{ session['usuario'] }} ({{ session['papel'] }})</strong></span>
-                <a href="{{ url_for('index') }}">Home</a>
-                <a href="{{ url_for('alunos_list') }}">Alunos</a>
-                <a href="{{ url_for('logout') }}">Sair</a>
+                <div>
+                    <a href="{{ url_for('index') }}">🏠 Home</a>
+                    <a href="{{ url_for('alunos_list') }}">👥 Alunos</a>
+                    <a href="{{ url_for('relatorios') }}">📊 Relatórios</a>
+                </div>
+                <div class="user-info">
+                    👤 {{ session['usuario'] }} ({{ session['papel'] }}) | 
+                    <a href="{{ url_for('logout') }}">🚪 Sair</a>
+                </div>
             </nav>
             {% endif %}
 
-            {{ body | safe }}  {# <--- FILTRO | safe #}
+            {{ body | safe }}
         </div>
     </body>
     </html>
-    """, title=title, body=body, session=session, get_flashed_messages=get_flashed_messages)
+    """, title=title, body=body, session=session)
 
 
-# --- Rota de Login (Pública) ---
+# Rota de Login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         usuario = request.form['usuario']
         senha = request.form['senha']
         
-        if autenticar_usuario(usuario, senha):
-            session_db = Session()
-            usuario_obj = session_db.query(Usuario).filter_by(nome_usuario=usuario).one_or_none()
-            session_db.close()
+        usuario_obj = autenticar_usuario(usuario, senha)
+        
+        if usuario_obj:
+            session['usuario'] = usuario_obj.nome_usuario
+            session['papel'] = usuario_obj.papel
             
-            if usuario_obj:
-                session['usuario'] = usuario_obj.nome_usuario
-                session['papel'] = usuario_obj.papel
-                
-                flash('Login bem-sucedido!', 'success')
-                return redirect(url_for('index'))
-            
-        flash('Credenciais inválidas.', 'error')
+            flash('Login bem-sucedido!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Credenciais inválidas.', 'error')
     
-    # Formulário de Login HTML (Limpo, sem dicas de senha ou usuário de teste)
     form_html = """
-    <h1>Acesso ao Sistema Web</h1>
+    <h1>🔐 Acesso ao Sistema Web</h1>
     <form method="POST">
-        <label for="usuario">Usuário:</label><br>
-        <input type="text" id="usuario" name="usuario" required style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+        <label for="usuario">Usuário:</label>
+        <input type="text" id="usuario" name="usuario" required>
         
-        <label for="senha">Senha:</label><br>
-        <input type="password" id="senha" name="senha" required style="width: 100%; padding: 8px; margin-bottom: 20px;"><br>
+        <label for="senha">Senha:</label>
+        <input type="password" id="senha" name="senha" required>
         
-        <input type="submit" value="Entrar" style="padding: 10px 15px; background-color: #0066cc; color: white; border: none; cursor: pointer;">
+        <input type="submit" value="Entrar">
     </form>
     """
     return render_page("Login", form_html)
 
 
-# --- Rota de Logout ---
+# Rota de Logout
 @app.route('/logout')
 def logout():
     session.pop('usuario', None)
@@ -120,60 +246,65 @@ def logout():
     return redirect(url_for('login'))
 
 
-# --- Tela Principal / Home (Protegida) ---
+# Tela Principal / Home
 @app.route('/')
 def index():
     if not session.get('usuario'):
         flash('Você precisa fazer login para acessar.', 'error')
         return redirect(url_for('login'))
         
-    if not checar_permissao(session['usuario'], ["ADMIN", "EDITOR", "VIEWER"]):
-         flash('Permissão negada para acessar a Home.', 'error')
-         return redirect(url_for('logout'))
+    if not checar_permissao_web(["ADMIN", "EDITOR", "VIEWER"]):
+        flash('Permissão negada para acessar a Home.', 'error')
+        return redirect(url_for('logout'))
 
     academias = listar_todas_academias()
     
     body_content = f"""
-    <h2>Painel Principal</h2>
-    <p>Seu nível de acesso é: <strong>{session['papel']}</strong>.</p>
+    <h1>🥋 Painel Principal - Secretaria de Lutas</h1>
+    <p>Seu nível de acesso é: <strong>{session['papel']}</strong></p>
     
-    <h3>Menu de Opções</h3>
+    <h2>📋 Menu de Opções</h2>
     <p>
-        <a href="{url_for('alunos_list')}">Gerenciar Alunos (CRUD)</a><br>
-        <a href="{url_for('relatorios')}">Relatórios (VIEWER)</a>
+        <a href="{url_for('alunos_list')}" class="btn">👥 Gerenciar Alunos (CRUD)</a>
+        <a href="{url_for('relatorios')}" class="btn">📊 Relatórios</a>
     </p>
 
-    <h3>Pólos Esportivos Cadastrados</h3>
-    <ul>
-        {''.join([f'<li>ID: {ac.id} | Nome: <strong>{ac.nome}</strong> | Responsável: {ac.responsavel}</li>' for ac in academias])}
-    </ul>
+    <h2>🏢 Pólos Esportivos Cadastrados</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Responsável</th>
+        </tr>
+        {''.join([f'<tr><td>{ac.id}</td><td><strong>{ac.nome}</strong></td><td>{ac.responsavel or "N/A"}</td></tr>' for ac in academias])}
+    </table>
     """
     return render_page("Home - Maricá Esportes", body_content)
 
 
-# --- Rotas de Alunos (Listagem e CRUD) ---
-
+# Rotas de Alunos
 @app.route('/alunos')
 def alunos_list():
-    # Proteção de Acesso: Apenas ADMIN e EDITOR podem acessar CRUD
-    if not checar_permissao(session.get('usuario'), ["ADMIN", "EDITOR"]):
+    if not checar_permissao_web(["ADMIN", "EDITOR"]):
         flash('PERMISSÃO NEGADA: Apenas ADMIN ou EDITOR podem gerenciar alunos.', 'error')
         return redirect(url_for('index'))
     
     alunos = listar_alunos_por_academia(ACADEMIA_ID_TESTE)
         
-    # Conteúdo HTML para listar os alunos
     body_content = f"""
-    <h2>Gerenciamento de Alunos</h2>
-    <p><a href="{url_for('alunos_adicionar')}" style="padding: 5px 10px; background-color: green; color: white; text-decoration: none; border-radius: 3px;">+ Adicionar Novo Aluno</a> | Total de Alunos Ativos: {len(alunos)}</p>
+    <h1>👥 Gerenciamento de Alunos</h1>
+    <p>
+        <a href="{url_for('alunos_adicionar')}" class="btn btn-success">➕ Adicionar Novo Aluno</a>
+        <span style="margin-left: 20px;">Total de Alunos Ativos: <strong>{len(alunos)}</strong></span>
+    </p>
     
-    <table border="1" width="100%">
+    <table>
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Nome Completo</th>
                 <th>CPF</th>
-                <th>Data Nasc.</th>
+                <th>Telefone</th>
                 <th>Status</th>
                 <th>Ações</th>
             </tr>
@@ -185,11 +316,11 @@ def alunos_list():
                     <td>{aluno.id}</td>
                     <td>{aluno.nome_completo}</td>
                     <td>{aluno.cpf_formatado}</td>
-                    <td>{aluno.data_nascimento}</td>
-                    <td>{'ATIVO' if aluno.status_ativo else 'INATIVO'}</td>
+                    <td>{aluno.telefone or "N/A"}</td>
+                    <td>{'✅ ATIVO' if aluno.status_ativo else '❌ INATIVO'}</td>
                     <td>
-                        <a href="{url_for('alunos_editar', id_aluno=aluno.id)}">Editar</a> | 
-                        <a href="{url_for('alunos_remover', cpf_aluno=aluno.cpf_formatado)}" onclick="return confirm('Tem certeza que deseja remover {aluno.nome_completo}? (Apenas ADMIN)')">Remover</a>
+                        <a href="{url_for('alunos_editar', id_aluno=aluno.id)}">✏️ Editar</a> | 
+                        <a href="{url_for('alunos_remover', id_aluno=aluno.id)}" onclick="return confirm('Tem certeza que deseja remover {aluno.nome_completo}?')" class="btn-danger">🗑️ Remover</a>
                     </td>
                 </tr>
             ''' for aluno in alunos])}
@@ -201,61 +332,57 @@ def alunos_list():
 
 @app.route('/alunos/adicionar', methods=['GET', 'POST'])
 def alunos_adicionar():
-    # Proteção de Acesso
-    if not checar_permissao(session.get('usuario'), ["ADMIN", "EDITOR"]):
+    if not checar_permissao_web(["ADMIN", "EDITOR"]):
         flash('PERMISSÃO NEGADA: Apenas ADMIN ou EDITOR podem adicionar alunos.', 'error')
         return redirect(url_for('alunos_list'))
 
     if request.method == 'POST':
-        # --- LÓGICA DE CADASTRO DE ALUNO ---
         try:
             nome = request.form['nome_completo']
             cpf = request.form['cpf']
-            rg = request.form['rg']
-            data_nascimento = request.form['data_nascimento']
-            telefone = request.form['telefone']
+            telefone = request.form.get('telefone', '')
+            responsavel = request.form.get('responsavel', '')
+            graduacao = request.form.get('graduacao', '')
             
-            aluno = cadastrar_aluno(
+            aluno_id = cadastrar_aluno(
                 nome_completo=nome,
-                cpf=cpf,
-                rg=rg,
-                data_nascimento=data_nascimento,
+                cpf_limpo=cpf,
+                academia_id=ACADEMIA_ID_TESTE,
                 telefone=telefone,
-                id_academia=ACADEMIA_ID_TESTE,
-                status_ativo=True
+                responsavel=responsavel,
+                graduacao=graduacao
             )
             
-            if aluno:
-                flash(f"Aluno '{aluno.nome_completo}' cadastrado com sucesso!", 'success')
+            if aluno_id:
+                flash(f"Aluno '{nome}' cadastrado com sucesso!", 'success')
                 return redirect(url_for('alunos_list'))
             else:
-                flash("Erro ao cadastrar aluno. Verifique o formato dos dados (ex: CPF/Data) ou se o CPF já existe.", 'error')
+                flash("Erro ao cadastrar aluno. Verifique se o CPF já existe.", 'error')
                 
         except Exception as e:
-            flash(f"Erro inesperado no formulário: {e}", 'error')
+            flash(f"Erro inesperado: {e}", 'error')
             
-    # --- EXIBIÇÃO DO FORMULÁRIO HTML (GET) ---
     body_content = f"""
-    <h2>Cadastrar Novo Aluno</h2>
+    <h1>➕ Cadastrar Novo Aluno</h1>
     <p><a href="{url_for('alunos_list')}">← Voltar para a Lista de Alunos</a></p>
     
     <form method="POST">
-        <label for="nome_completo">Nome Completo:</label><br>
-        <input type="text" id="nome_completo" name="nome_completo" required style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+        <label for="nome_completo">Nome Completo:</label>
+        <input type="text" id="nome_completo" name="nome_completo" required>
         
-        <label for="cpf">CPF (somente números):</label><br>
-        <input type="text" id="cpf" name="cpf" required pattern="\d{{11}}" title="O CPF deve ter 11 dígitos" style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+        <label for="cpf">CPF (somente números - 11 dígitos):</label>
+        <input type="text" id="cpf" name="cpf" required pattern="\\d{{11}}" title="O CPF deve ter 11 dígitos">
         
-        <label for="rg">RG:</label><br>
-        <input type="text" id="rg" name="rg" required style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+        <label for="telefone">Telefone:</label>
+        <input type="text" id="telefone" name="telefone">
 
-        <label for="data_nascimento">Data de Nascimento:</label><br>
-        <input type="date" id="data_nascimento" name="data_nascimento" required style="width: 100%; padding: 8px; margin-bottom: 10px;"><br>
+        <label for="responsavel">Responsável:</label>
+        <input type="text" id="responsavel" name="responsavel">
+
+        <label for="graduacao">Graduação Inicial:</label>
+        <input type="text" id="graduacao" name="graduacao">
         
-        <label for="telefone">Telefone:</label><br>
-        <input type="text" id="telefone" name="telefone" required style="width: 100%; padding: 8px; margin-bottom: 20px;"><br>
-        
-        <input type="submit" value="Cadastrar Aluno" style="padding: 10px 15px; background-color: #0066cc; color: white; border: none; cursor: pointer;">
+        <input type="submit" value="Cadastrar Aluno">
     </form>
     """
     return render_page("Cadastrar Aluno", body_content)
@@ -263,48 +390,50 @@ def alunos_adicionar():
 
 @app.route('/alunos/editar/<int:id_aluno>')
 def alunos_editar(id_aluno):
-    # Rota para o formulário de edição (Será implementado em seguida)
-    if not checar_permissao(session.get('usuario'), ["ADMIN", "EDITOR"]):
+    if not checar_permissao_web(["ADMIN", "EDITOR"]):
         flash('PERMISSÃO NEGADA.', 'error')
         return redirect(url_for('alunos_list'))
     
     body_content = f"<h2>Editar Aluno ID: {id_aluno}</h2><p>Lógica de Edição virá aqui.</p>"
     return render_page("Editar Aluno", body_content)
     
-@app.route('/alunos/remover/<cpf_aluno>')
-def alunos_remover(cpf_aluno):
-    # Rota de deleção (Apenas ADMIN)
-    if not checar_permissao(session.get('usuario'), ["ADMIN"]):
+@app.route('/alunos/remover/<int:id_aluno>')
+def alunos_remover(id_aluno):
+    if not checar_permissao_web(["ADMIN"]):
         flash('PERMISSÃO NEGADA: Apenas ADMIN pode remover alunos.', 'error')
         return redirect(url_for('alunos_list'))
         
-    # A lógica de deletar_aluno(cpf_aluno) virá aqui
-    flash(f"Usuário com CPF {cpf_aluno} seria removido agora (Lógica de remoção pendente).", 'success')
+    from aluno_service import deletar_aluno
+    if deletar_aluno(id_aluno):
+        flash(f"Aluno ID {id_aluno} removido com sucesso.", 'success')
+    else:
+        flash(f"Erro ao remover aluno ID {id_aluno}.", 'error')
+    
     return redirect(url_for('alunos_list'))
 
 
-# --- Rota de Relatórios (Permissão Mínima: VIEWERS) ---
+# Rota de Relatórios
 @app.route('/relatorios')
 def relatorios():
-    if not checar_permissao(session.get('usuario'), ["ADMIN", "EDITOR", "VIEWER"]):
+    if not checar_permissao_web(["ADMIN", "EDITOR", "VIEWER"]):
         flash('ACESSO NEGADO: Papel inválido.', 'error')
         return redirect(url_for('index'))
     
-    body_content = "<h2>Relatórios Gerenciais</h2><p>Página em construção! Aqui virão os relatórios que você já criou.</p>"
+    body_content = "<h2>📊 Relatórios Gerenciais</h2><p>Página em construção! Aqui virão os relatórios.</p>"
     return render_page("Relatórios", body_content)
 
 
-# --- Execução do Servidor (MUDANÇA AQUI!) ---
+# Execução do Servidor
 if __name__ == '__main__':
-    # Garante que o BD exista e o usuário ADMIN (juan) esteja criado.
     create_database_tables()
-    inicializar_usuario_admin() 
+    inicializar_usuario_admin()
     
-    print("--- Servidor Flask Iniciando ---")
+    print("\n" + "="*50)
+    print("🚀 Servidor Flask Iniciando")
+    print("="*50)
+    print("📍 Acesse: http://127.0.0.1:5000/login")
+    print("👤 Usuário padrão: juan")
+    print("🔑 Senha padrão: Lke74890@")
+    print("="*50 + "\n")
     
-    # 1. Descubra seu IP local (ex: 192.168.1.10)
-    print("Acesse no seu navegador: http://127.0.0.1:5000/login")
-    print("Para seu amigo acessar na mesma rede, use seu IP local (ex: http://0.0.0.0:5000/login)")
-    
-    # 2. Configura o Flask para ouvir todas as interfaces de rede (host='0.0.0.0')
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0', port=5000)

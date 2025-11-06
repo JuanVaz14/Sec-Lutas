@@ -1,0 +1,4 @@
+SQLAlchemy==2.0.23
+bcrypt==4.1.2
+python-dotenv==1.0.0
+Flask==3.0.0

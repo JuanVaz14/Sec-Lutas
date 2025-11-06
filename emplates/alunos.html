@@ -1,0 +1,30 @@
+<h2>Lista de Alunos</h2>
+
+<table border="1" cellpadding="6">
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>CPF</th>
+      <th>Telefone</th>
+      <th>Academia</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for aluno in alunos %}
+    <tr>
+      <td>{{ aluno.nome_completo }}</td>
+      <td>{{ aluno.cpf_formatado }}</td>
+      <td>{{ aluno.telefone }}</td>
+      <td>{{ aluno.academia.nome }}</td>
+      <td>
+        {% if aluno.status_ativo %}
+          ✅ Ativo
+        {% else %}
+          ❌ Inativo
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

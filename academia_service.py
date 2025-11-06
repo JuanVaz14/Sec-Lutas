@@ -1,15 +1,17 @@
+# academia_service.py
+
 from models import Academia, Session
 from sqlalchemy.exc import IntegrityError, NoResultFound
-from typing import List
+from typing import List, Optional
 
-# --- C: CREATE (Cadastrar Nova Academia/Polo) ---
-def cadastrar_academia(nome: str, endereco: str, responsavel: str) -> Academia | None:
-    """Cadastra um novo polo de academia no banco de dados."""
+# --- CREATE (Cadastrar Nova Academia/Polo) ---
+def cadastrar_academia(nome: str, endereco: str = "", responsavel: str = "") -> Optional[int]:
+    """Cadastra um novo polo de academia no banco de dados e retorna o ID."""
     session = Session()
     try:
         # Verifica se já existe uma academia com o mesmo nome
         if session.query(Academia).filter_by(nome=nome).first():
-            print(f"ERRO: Academia com o nome '{nome}' já está cadastrada.")
+            print(f"❌ ERRO: Academia com o nome '{nome}' já está cadastrada.")
             return None
         
         nova_academia = Academia(
@@ -20,18 +22,19 @@ def cadastrar_academia(nome: str, endereco: str, responsavel: str) -> Academia |
         
         session.add(nova_academia)
         session.commit()
-        print(f"SUCESSO: Academia '{nome}' cadastrada com ID: {nova_academia.id}")
-        return nova_academia
+        session.refresh(nova_academia)
+        print(f"✅ SUCESSO: Academia '{nome}' cadastrada com ID: {nova_academia.id}")
+        return nova_academia.id
     
     except IntegrityError:
-        print("ERRO: Ocorreu um erro de integridade ao cadastrar a academia.")
+        print("❌ ERRO: Ocorreu um erro de integridade ao cadastrar a academia.")
         session.rollback()
         return None
     finally:
         session.close()
 
-# --- R: READ (Buscar e Listar Academias) ---
-def buscar_academia_por_id(academia_id: int) -> Academia | None:
+# --- READ (Buscar e Listar Academias) ---
+def buscar_academia_por_id(academia_id: int) -> Optional[Academia]:
     """Busca uma academia específica pelo ID."""
     session = Session()
     try:
@@ -49,29 +52,31 @@ def listar_todas_academias() -> List[Academia]:
     finally:
         session.close()
 
-# --- U: UPDATE (Atualizar Informações) ---
-def atualizar_academia(academia_id: int, endereco: str = None, responsavel: str = None) -> bool:
-    """Atualiza o endereço e/ou responsável de uma academia pelo ID."""
+# --- UPDATE (Atualizar Informações) ---
+def atualizar_academia(academia_id: int, nome: str = None, endereco: str = None, responsavel: str = None) -> bool:
+    """Atualiza informações de uma academia pelo ID."""
     session = Session()
     try:
         academia = session.query(Academia).filter_by(id=academia_id).one()
         
+        if nome:
+            academia.nome = nome
         if endereco:
             academia.endereco = endereco
         if responsavel:
             academia.responsavel = responsavel
             
         session.commit()
-        print(f"SUCESSO: Academia '{academia.nome}' (ID: {academia_id}) atualizada.")
+        print(f"✅ SUCESSO: Academia '{academia.nome}' (ID: {academia_id}) atualizada.")
         return True
     except NoResultFound:
-        print(f"ERRO: Academia com ID {academia_id} não encontrada.")
+        print(f"❌ ERRO: Academia com ID {academia_id} não encontrada.")
         session.rollback()
         return False
     finally:
         session.close()
         
-# --- D: DELETE (Remover Academia/Polo) ---
+# --- DELETE (Remover Academia/Polo) ---
 def deletar_academia(academia_id: int) -> bool:
     """Remove uma academia permanentemente pelo ID."""
     session = Session()
@@ -79,20 +84,16 @@ def deletar_academia(academia_id: int) -> bool:
         academia = session.query(Academia).filter_by(id=academia_id).one()
         nome = academia.nome
         
-        # IMPORTANTE: Se esta academia tiver alunos ou treinadores vinculados,
-        # o banco de dados (SQLite por padrão) pode impedir a deleção
-        # por conta da Chave Estrangeira.
-        
         session.delete(academia)
         session.commit()
-        print(f"SUCESSO: Academia '{nome}' removida permanentemente do cadastro.")
+        print(f"✅ SUCESSO: Academia '{nome}' removida permanentemente do cadastro.")
         return True
     except NoResultFound:
-        print(f"ERRO: Academia com ID {academia_id} não encontrada para deleção.")
+        print(f"❌ ERRO: Academia com ID {academia_id} não encontrada para deleção.")
         session.rollback()
         return False
     except IntegrityError:
-        print(f"ERRO: A academia '{nome}' possui alunos ou treinadores vinculados e não pode ser deletada.")
+        print(f"❌ ERRO: A academia possui alunos ou treinadores vinculados e não pode ser deletada.")
         session.rollback()
         return False
     finally:

@@ -1,62 +1,149 @@
-# db_migrate.py
+# models.py
 
-import os
-import sqlite3
-from models import DATABASE_URL, create_database_tables
+from sqlalchemy import create_engine, Column, Integer, String, Date, Boolean, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from datetime import date
 
-def db_path_from_url(url: str) -> str:
-    if url.startswith("sqlite:///"):
-        return os.path.abspath(url.replace("sqlite:///", ""))
-    return os.path.abspath(url)
+# ===========================
+# CONFIGURAÇÃO DO BANCO DE DADOS
+# ===========================
+DATABASE_URL = "sqlite:///sec_lutas.db"
+engine = create_engine(DATABASE_URL, echo=False)
+Base = declarative_base()
+Session = sessionmaker(bind=engine)
 
-def table_columns(conn: sqlite3.Connection, table: str) -> set:
-    cur = conn.execute(f"PRAGMA table_info('{table}')")
-    return {row[1] for row in cur.fetchall()}
 
-def add_column(conn: sqlite3.Connection, table: str, col_def: str):
-    sql = f"ALTER TABLE {table} ADD COLUMN {col_def}"
-    conn.execute(sql)
+# ===========================
+# TABELA: ACADEMIA (POLOS)
+# ===========================
+class Academia(Base):
+    __tablename__ = 'academias'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(200), nullable=False, unique=True)
+    endereco = Column(String(300), nullable=True)
+    responsavel = Column(String(200), nullable=True)
+    
+    # Relacionamentos
+    alunos = relationship("Aluno", back_populates="academia", cascade="all, delete-orphan")
+    treinadores = relationship("Treinador", back_populates="academia", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Academia(id={self.id}, nome='{self.nome}')>"
 
-def main():
-    db_path = db_path_from_url(DATABASE_URL)
-    if not os.path.exists(db_path):
-        print(f"Arquivo DB não encontrado em: {db_path}")
-        print("Se for um projeto em desenvolvimento, pode recriar o DB removendo o arquivo e executando o sistema.")
-        return
 
-    conn = sqlite3.connect(db_path)
-    try:
-        cols = table_columns(conn, "alunos")
-        to_add = {
-            "telefone": "telefone TEXT DEFAULT ''",
-            "responsavel": "responsavel TEXT DEFAULT ''",
-            "graduacao": "graduacao TEXT DEFAULT ''",
-            # se quiser garantir presença das colunas de cpf/formato (ajuste conforme seu model)
-            "cpf_formatado": "cpf_formatado TEXT DEFAULT ''",
-            "cpf_limpo": "cpf_limpo TEXT DEFAULT ''",
-        }
-        added = False
-        for name, defn in to_add.items():
-            if name not in cols:
-                print(f"Adicionando coluna: {name}")
-                add_column(conn, "alunos", defn)
-                added = True
-            else:
-                print(f"Coluna já existe: {name}")
-        if added:
-            conn.commit()
-            print("Alterações aplicadas no DB.")
-        else:
-            print("Nenhuma alteração necessária.")
-    finally:
-        conn.close()
+# ===========================
+# TABELA: ALUNO
+# ===========================
+class Aluno(Base):
+    __tablename__ = 'alunos'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome_completo = Column(String(200), nullable=False)
+    cpf_limpo = Column(String(11), unique=True, nullable=False)  # Somente números
+    cpf_formatado = Column(String(14), nullable=True)  # 000.000.000-00
+    data_nascimento = Column(Date, nullable=True)
+    data_cadastro = Column(Date, default=date.today)
+    telefone = Column(String(20), nullable=True)
+    responsavel = Column(String(200), nullable=True)
+    graduacao = Column(String(100), nullable=True)
+    status_ativo = Column(Boolean, default=True)
+    
+    # Chave estrangeira
+    academia_id = Column(Integer, ForeignKey('academias.id'), nullable=False)
+    
+    # Relacionamentos
+    academia = relationship("Academia", back_populates="alunos")
+    matriculas = relationship("Matricula", back_populates="aluno", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Aluno(id={self.id}, nome='{self.nome_completo}', cpf='{self.cpf_formatado}')>"
 
-    # Garante que outras tabelas (novas) sejam criadas se necessário
-    try:
-        create_database_tables()
-        print("create_database_tables() executado (demais tabelas criadas/atualizadas).")
-    except Exception as e:
-        print("Aviso: falha ao rodar create_database_tables():", e)
 
-if __name__ == "__main__":
-    main()
+# ===========================
+# TABELA: MODALIDADE
+# ===========================
+class Modalidade(Base):
+    __tablename__ = 'modalidades'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome = Column(String(100), nullable=False, unique=True)
+    tipo = Column(String(100), nullable=True)  # Ex: "Alto Rendimento", "Base"
+    
+    # Relacionamentos
+    treinadores = relationship("Treinador", back_populates="modalidade", cascade="all, delete-orphan")
+    matriculas = relationship("Matricula", back_populates="modalidade", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Modalidade(id={self.id}, nome='{self.nome}')>"
+
+
+# ===========================
+# TABELA: TREINADOR
+# ===========================
+class Treinador(Base):
+    __tablename__ = 'treinadores'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome_completo = Column(String(200), nullable=False)
+    telefone = Column(String(20), nullable=True)
+    certificacao = Column(String(200), nullable=True)
+    
+    # Chaves estrangeiras
+    academia_id = Column(Integer, ForeignKey('academias.id'), nullable=False)
+    modalidade_id = Column(Integer, ForeignKey('modalidades.id'), nullable=False)
+    
+    # Relacionamentos
+    academia = relationship("Academia", back_populates="treinadores")
+    modalidade = relationship("Modalidade", back_populates="treinadores")
+    
+    def __repr__(self):
+        return f"<Treinador(id={self.id}, nome='{self.nome_completo}')>"
+
+
+# ===========================
+# TABELA: MATRÍCULA (Aluno + Modalidade)
+# ===========================
+class Matricula(Base):
+    __tablename__ = 'matriculas'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    numero_matricula = Column(String(50), unique=True, nullable=False)
+    graduacao = Column(String(100), nullable=True)
+    data_matricula = Column(Date, default=date.today)
+    
+    # Chaves estrangeiras
+    aluno_id = Column(Integer, ForeignKey('alunos.id'), nullable=False)
+    modalidade_id = Column(Integer, ForeignKey('modalidades.id'), nullable=False)
+    
+    # Relacionamentos
+    aluno = relationship("Aluno", back_populates="matriculas")
+    modalidade = relationship("Modalidade", back_populates="matriculas")
+    
+    def __repr__(self):
+        return f"<Matricula(id={self.id}, numero='{self.numero_matricula}')>"
+
+
+# ===========================
+# TABELA: USUÁRIO (Sistema de Login)
+# ===========================
+class Usuario(Base):
+    __tablename__ = 'usuarios'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nome_usuario = Column(String(100), unique=True, nullable=False)
+    senha_hash = Column(String(200), nullable=False)
+    papel = Column(String(20), default="VIEWER")  # ADMIN, EDITOR, VIEWER
+    
+    def __repr__(self):
+        return f"<Usuario(id={self.id}, usuario='{self.nome_usuario}', papel='{self.papel}')>"
+
+
+# ===========================
+# FUNÇÃO: CRIAR TABELAS
+# ===========================
+def create_database_tables():
+    """Cria todas as tabelas no banco de dados se não existirem."""
+    Base.metadata.create_all(engine)
+    print("✅ Tabelas criadas/verificadas com sucesso!")
